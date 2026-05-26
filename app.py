@@ -19,6 +19,32 @@ def get_db():
         database="hospital1_db"
     )
 
+def create_tables():
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute("""CREATE TABLE IF NOT EXISTS patients (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(100),
+        email VARCHAR(100) UNIQUE,
+        phone VARCHAR(20),
+        password VARCHAR(255))""")
+    cursor.execute("""CREATE TABLE IF NOT EXISTS doctors (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(100),
+        specialization VARCHAR(100),
+        phone VARCHAR(20),
+        email VARCHAR(100))""")
+    cursor.execute("""CREATE TABLE IF NOT EXISTS appointments (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        patient_name VARCHAR(100),
+        doctor_name VARCHAR(100),
+        appointment_date DATE,
+        status VARCHAR(50))""")
+    db.commit()
+    cursor.close()
+    db.close()
+
+create_tables()
 # ─────────────────────────────────────────────
 # SHARED BASE STYLE
 # ─────────────────────────────────────────────
