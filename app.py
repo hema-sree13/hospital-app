@@ -13,10 +13,11 @@ app.permanent_session_lifetime = timedelta(minutes=30)
 # ─────────────────────────────────────────────
 def get_db():
     return mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="hema@8019",
-        database="hospital1_db"
+        host=os.environ.get("DB_HOST"),
+        user=os.environ.get("DB_USER"),
+        password=os.environ.get("DB_PASSWORD"),
+        database=os.environ.get("DB_NAME"),
+        port=int(os.environ.get("DB_PORT", 3306))
     )
 
 def create_tables():
@@ -44,7 +45,10 @@ def create_tables():
     cursor.close()
     db.close()
 
-create_tables()
+try:
+    create_tables()
+except Exception as e:
+    print(f"DB not ready: {e}")
 # ─────────────────────────────────────────────
 # SHARED BASE STYLE
 # ─────────────────────────────────────────────
