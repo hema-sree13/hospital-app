@@ -1,5 +1,6 @@
 from flask import Flask, render_template_string, request, redirect, session
-import mysql.connector
+import psycopg2
+import psycopg2.extras
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import timedelta
 import os
@@ -12,43 +13,45 @@ app.permanent_session_lifetime = timedelta(minutes=30)
 # DATABASE
 # ─────────────────────────────────────────────
 def get_db():
-    return mysql.connector.connect(
+    return psycopg2.connect(
         host=os.environ.get("DB_HOST"),
         user=os.environ.get("DB_USER"),
         password=os.environ.get("DB_PASSWORD"),
-        database=os.environ.get("DB_NAME"),
-        port=int(os.environ.get("DB_PORT", 3306))
+        dbname=os.environ.get("DB_NAME"),
+        port=os.environ.get("DB_PORT", 5432)
     )
 
 def create_tables():
-    db = get_db()
-    cursor = db.cursor()
-    cursor.execute("""CREATE TABLE IF NOT EXISTS patients (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        name VARCHAR(100),
-        email VARCHAR(100) UNIQUE,
-        phone VARCHAR(20),
-        password VARCHAR(255))""")
-    cursor.execute("""CREATE TABLE IF NOT EXISTS doctors (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        name VARCHAR(100),
-        specialization VARCHAR(100),
-        phone VARCHAR(20),
-        email VARCHAR(100))""")
-    cursor.execute("""CREATE TABLE IF NOT EXISTS appointments (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        patient_name VARCHAR(100),
-        doctor_name VARCHAR(100),
-        appointment_date DATE,
-        status VARCHAR(50))""")
-    db.commit()
-    cursor.close()
-    db.close()
+    try:
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute("""CREATE TABLE IF NOT EXISTS patients (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(100),
+            email VARCHAR(100) UNIQUE,
+            phone VARCHAR(20),
+            password VARCHAR(255))""")
+        cursor.execute("""CREATE TABLE IF NOT EXISTS doctors (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(100),
+            specialization VARCHAR(100),
+            phone VARCHAR(20),
+            email VARCHAR(100))""")
+        cursor.execute("""CREATE TABLE IF NOT EXISTS appointments (
+            id SERIAL PRIMARY KEY,
+            patient_name VARCHAR(100),
+            doctor_name VARCHAR(100),
+            appointment_date DATE,
+            status VARCHAR(50))""")
+        db.commit()
+        cursor.close()
+        db.close()
+        print("Tables created successfully")
+    except Exception as e:
+        print(f"DB not ready: {e}")
 
-try:
-    create_tables()
-except Exception as e:
-    print(f"DB not ready: {e}")
+create_tables()
+
 # ─────────────────────────────────────────────
 # SHARED BASE STYLE
 # ─────────────────────────────────────────────
@@ -111,10 +114,6 @@ BASE_STYLE = """
 </style>
 """
 
-# ─────────────────────────────────────────────
-# HTML TEMPLATES (all inline)
-# ─────────────────────────────────────────────
-
 INDEX_HTML = """<!DOCTYPE html><html><head><title>Hospital Management System</title>""" + BASE_STYLE + """
 <style>
   html{scroll-behavior:smooth;}
@@ -162,7 +161,6 @@ INDEX_HTML = """<!DOCTYPE html><html><head><title>Hospital Management System</ti
     <li><a href="#contact">Contact</a></li>
   </ul>
 </nav>
-
 <section id="home">
   <div class="overlay">
     <h1>Hospital Management System</h1>
@@ -170,12 +168,10 @@ INDEX_HTML = """<!DOCTYPE html><html><head><title>Hospital Management System</ti
     <a href="#appointment" class="hero-btn">Book Appointment</a>
   </div>
 </section>
-
 <section id="about" class="content">
   <h2 class="page-title">About Us</h2>
   <p class="about-text">We provide quality healthcare services with expert doctors,<br>modern equipment and better patient care.</p>
 </section>
-
 <section id="doctors" class="content" style="background:#eaf4fb;">
   <h2 class="page-title">Our Doctors</h2>
   <div class="doc-grid">
@@ -184,40 +180,36 @@ INDEX_HTML = """<!DOCTYPE html><html><head><title>Hospital Management System</ti
     <div class="doc-card"><div style="font-size:36px;">&#128104;&#8205;&#9877;&#65039;</div><h3>Dr. Arjun</h3><p>Orthopedic</p></div>
   </div>
 </section>
-
 <section id="appointment" class="content">
   <h2 class="page-title">Book Appointment</h2>
   <form class="appt-form" action="/appointment" method="POST">
-    <input type="text" name="patient_name"    placeholder="Patient Name"   required>
-    <input type="text" name="doctor_name"     placeholder="Doctor Name"    required>
-    <input type="date" name="appointment_date"                              required>
+    <input type="text" name="patient_name" placeholder="Patient Name" required>
+    <input type="text" name="doctor_name" placeholder="Doctor Name" required>
+    <input type="date" name="appointment_date" required>
     <button type="submit">Book Appointment</button>
   </form>
 </section>
-
 <section id="login" class="content" style="background:#eaf4fb;">
   <h2 class="page-title">Login</h2>
   <form class="auth-form" action="/login" method="POST">
     {% if error %}<div class="error">{{ error }}</div>{% endif %}
-    <input type="email"    name="email"    placeholder="Enter Email"    required>
+    <input type="email" name="email" placeholder="Enter Email" required>
     <input type="password" name="password" placeholder="Enter Password" required>
     <button type="submit">Login</button>
     <div class="nav-hint"><a href="#register">No account? Register</a></div>
   </form>
 </section>
-
 <section id="register" class="content">
   <h2 class="page-title">Register</h2>
   <form class="auth-form" action="/register" method="POST">
-    <input type="text"     name="name"     placeholder="Full Name"     required>
-    <input type="email"    name="email"    placeholder="Email"         required>
-    <input type="text"     name="phone"    placeholder="Phone Number"  required>
-    <input type="password" name="password" placeholder="Password"      required>
+    <input type="text" name="name" placeholder="Full Name" required>
+    <input type="email" name="email" placeholder="Email" required>
+    <input type="text" name="phone" placeholder="Phone Number" required>
+    <input type="password" name="password" placeholder="Password" required>
     <button type="submit">Register</button>
     <div class="nav-hint"><a href="#login">Have an account? Login</a></div>
   </form>
 </section>
-
 <section id="reports" class="content" style="background:#eaf4fb;">
   <h2 class="page-title">Hospital Reports</h2>
   <div class="report-grid">
@@ -227,14 +219,12 @@ INDEX_HTML = """<!DOCTYPE html><html><head><title>Hospital Management System</ti
     <div class="rcard"><h3>Approved Appointments</h3><p>{{ approved_appointments }}</p></div>
   </div>
 </section>
-
 <section id="contact">
   <h2>Contact Us</h2>
   <p>Email: hospital@gmail.com</p>
   <p>Phone: +91 9876543210</p>
   <p>Location: Andhra Pradesh, India</p>
 </section>
-
 <footer><p>Hospital Management System &copy; 2026</p></footer>
 </body></html>"""
 
@@ -312,9 +302,9 @@ DASHBOARD_HTML = """<!DOCTYPE html><html><head><title>Dashboard</title>""" + BAS
   </div>
   <div class="dash-grid">
     <a href="/appointment" class="dash-card"><div class="icon">&#128197;</div><h3>Book Appointment</h3><p>Schedule a new appointment</p></a>
-    <a href="/doctors"     class="dash-card"><div class="icon">&#128104;&#8205;&#9877;&#65039;</div><h3>View Doctors</h3><p>See available doctors</p></a>
-    <a href="/reports"     class="dash-card"><div class="icon">&#128202;</div><h3>Reports</h3><p>Hospital statistics</p></a>
-    <a href="/admin"       class="dash-card"><div class="icon">&#128295;</div><h3>Admin Panel</h3><p>Manage patients &amp; appointments</p></a>
+    <a href="/doctors" class="dash-card"><div class="icon">&#128104;&#8205;&#9877;&#65039;</div><h3>View Doctors</h3><p>See available doctors</p></a>
+    <a href="/reports" class="dash-card"><div class="icon">&#128202;</div><h3>Reports</h3><p>Hospital statistics</p></a>
+    <a href="/admin" class="dash-card"><div class="icon">&#128295;</div><h3>Admin Panel</h3><p>Manage patients &amp; appointments</p></a>
   </div>
 </div>
 </body></html>"""
@@ -347,13 +337,13 @@ ADD_DOCTORS_HTML = """<!DOCTYPE html><html><head><title>Add Doctor</title>""" + 
     <h2>Add Doctor</h2>
     <form action="/add_doctors" method="POST">
       <label>Full Name</label>
-      <input type="text"  name="name"           placeholder="Doctor's full name"  required>
+      <input type="text" name="name" placeholder="Doctor's full name" required>
       <label>Specialization</label>
-      <input type="text"  name="specialization" placeholder="e.g. Cardiologist"   required>
+      <input type="text" name="specialization" placeholder="e.g. Cardiologist" required>
       <label>Phone</label>
-      <input type="text"  name="phone"          placeholder="Phone number"        required>
+      <input type="text" name="phone" placeholder="Phone number" required>
       <label>Email</label>
-      <input type="email" name="email"          placeholder="Doctor's email"      required>
+      <input type="email" name="email" placeholder="Doctor's email" required>
       <button type="submit" class="btn-primary">Add Doctor</button>
     </form>
     <div class="links"><a href="/admin">Back to Admin</a></div>
@@ -403,7 +393,6 @@ ADMIN_HTML = """<!DOCTYPE html><html><head><title>Admin Panel</title>""" + BASE_
   </div>
 </nav>
 <div class="container">
-
   <div class="section-card">
     <h2 class="section-title">Patients</h2>
     <form method="GET" action="/admin">
@@ -424,7 +413,6 @@ ADMIN_HTML = """<!DOCTYPE html><html><head><title>Admin Panel</title>""" + BASE_
       </tbody>
     </table>
   </div>
-
   <div class="section-card">
     <h2 class="section-title">Appointments</h2>
     <table>
@@ -438,11 +426,11 @@ ADMIN_HTML = """<!DOCTYPE html><html><head><title>Admin Panel</title>""" + BASE_
           </td>
           <td>
             {% if a[4]=='Pending' %}
-              <a href="/approve/{{ a[0] }}"  class="action-btn btn-approve">Approve</a>
-              <a href="/cancel/{{ a[0] }}"   class="action-btn btn-cancel">Cancel</a>
+              <a href="/approve/{{ a[0] }}" class="action-btn btn-approve">Approve</a>
+              <a href="/cancel/{{ a[0] }}" class="action-btn btn-cancel">Cancel</a>
             {% elif a[4]=='Approved' %}
               <a href="/complete/{{ a[0] }}" class="action-btn btn-complete">Complete</a>
-              <a href="/cancel/{{ a[0] }}"   class="action-btn btn-cancel">Cancel</a>
+              <a href="/cancel/{{ a[0] }}" class="action-btn btn-cancel">Cancel</a>
             {% else %}
               <span style="color:#999;font-size:13px;">No actions</span>
             {% endif %}
@@ -454,7 +442,6 @@ ADMIN_HTML = """<!DOCTYPE html><html><head><title>Admin Panel</title>""" + BASE_
       </tbody>
     </table>
   </div>
-
 </div>
 </body></html>"""
 
@@ -495,7 +482,8 @@ def home():
     cursor.close(); db.close()
     return render_template_string(INDEX_HTML,
         total_patients=total_patients, total_doctors=total_doctors,
-        total_appointments=total_appointments, approved_appointments=approved_appointments)
+        total_appointments=total_appointments, approved_appointments=approved_appointments,
+        error=None)
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -580,21 +568,24 @@ def approve(id):
     if "user" not in session: return redirect("/login")
     db = get_db(); cursor = db.cursor()
     cursor.execute("UPDATE appointments SET status='Approved' WHERE id=%s", (id,))
-    db.commit(); cursor.close(); db.close(); return redirect("/admin")
+    db.commit(); cursor.close(); db.close()
+    return redirect("/admin")
 
 @app.route("/complete/<int:id>")
 def complete(id):
     if "user" not in session: return redirect("/login")
     db = get_db(); cursor = db.cursor()
     cursor.execute("UPDATE appointments SET status='Completed' WHERE id=%s", (id,))
-    db.commit(); cursor.close(); db.close(); return redirect("/admin")
+    db.commit(); cursor.close(); db.close()
+    return redirect("/admin")
 
 @app.route("/cancel/<int:id>")
 def cancel(id):
     if "user" not in session: return redirect("/login")
     db = get_db(); cursor = db.cursor()
     cursor.execute("UPDATE appointments SET status='Cancelled' WHERE id=%s", (id,))
-    db.commit(); cursor.close(); db.close(); return redirect("/admin")
+    db.commit(); cursor.close(); db.close()
+    return redirect("/admin")
 
 @app.route("/reports")
 def reports():
@@ -609,8 +600,6 @@ def reports():
         total_patients=total_patients, total_doctors=total_doctors,
         total_appointments=total_appointments, approved_appointments=approved_appointments)
 
-
-# ═══════════════════════════════════════════════
 if __name__ == '__main__':
     debug_mode = os.environ.get("DEBUG", "false").lower() == "true"
     app.run(debug=debug_mode)
