@@ -18,7 +18,8 @@ def get_db():
         user=os.environ.get("DB_USER"),
         password=os.environ.get("DB_PASSWORD"),
         dbname=os.environ.get("DB_NAME"),
-        port=os.environ.get("DB_PORT", 5432)
+        port=os.environ.get("DB_PORT", 5432),
+        sslmode="require"
     )
 
 def create_tables():
